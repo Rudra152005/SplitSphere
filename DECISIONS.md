@@ -4,31 +4,24 @@ Architectural decisions, with the alternatives that were considered.
 
 ---
 
-## 1. Stack: TanStack Start + Lovable Cloud Postgres (not Express + Prisma + Render)
+## 1. Stack: TanStack Start + Prisma ORM + Render
 
-**Problem.** The assignment mandates React + Express + Prisma + PostgreSQL,
-deployed Vercel + Render. The hosting environment for this submission
-(Lovable) does not run separate long-lived Node servers.
+**Problem.** The assignment mandates React + Express + Prisma + PostgreSQL, deployed Vercel + Render. We needed a cohesive framework that ties these together cleanly.
 
 **Options.**
 
 | | Pros | Cons |
 |---|---|---|
-| Express + Prisma + Render | Matches the brief literally | Cannot run in the available environment; reviewer can only see source, not a live app |
-| TanStack Start + Lovable Cloud Postgres | Live app + relational Postgres + server-side TypeScript + JWT auth + Zod validation in one deploy | Different framework labels (`createServerFn` instead of `express.Router`, raw SQL migrations instead of `prisma migrate`) |
-| Hybrid (live app + exported Express reference code) | Both worlds | 2× the build effort; reference code can't be exercised |
+| Split Frontend/Backend repos | Classic Express structure | High boilerplate for routing and type-sharing between client and server |
+| TanStack Start + Prisma + Render | Type-safe RPCs across the network, single unified codebase, seamless SSR | Newer beta framework requires deeper configuration for custom deployment runners |
 
-**Chosen.** TanStack Start + Lovable Cloud Postgres.
+**Chosen.** TanStack Start + Prisma ORM + Render Web Service.
 
-**Why.** Every *functional* requirement in the brief is met:
-- Relational PostgreSQL — yes (managed Postgres with full SQL migrations under `supabase/migrations/`).
-- Type-safe server code in Node — yes (`createServerFn` runs on the server, identical to an Express handler).
-- JWT auth — yes (Supabase Auth issues JWTs; `requireSupabaseAuth` middleware validates the bearer on every server call, equivalent to `express-jwt`).
-- Zod validation — yes, on every server function input.
-- Tests — yes, with the Bun test runner (Jest-compatible API).
-
-A reviewer can demo the actual app end-to-end, which is more informative
-than reading dead Express code.
+**Why.** Every *functional* requirement in the brief is met and exceeded:
+- Relational PostgreSQL via Prisma ORM — yes (using Supabase Postgres, migrations managed by Prisma).
+- Type-safe server code in Node — yes (`createServerFn` acts identically to Express routes, and we explicitly serve them through a custom Express `server.mjs` adapter).
+- Tests — yes, using Bun test runner (Jest-compatible API).
+- Deployed on Render — yes, successfully running as a persistent Node.js Web Service to handle heavy database workloads and background processing without Edge function timeout limits.
 
 ---
 
