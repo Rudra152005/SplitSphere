@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                 String               @id @default(uuid())
+  name               String
+  email              String               @unique
+  password           String
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  groupMemberships   GroupMember[]
+  auditLogsPerformed AuditLog[]           @relation("PerformedBy")
+  groupsOwned        Group[]              @relation("GroupOwner")
+}
+
+model Group {
+  id           String        @id @default(uuid())
+  ownerId      String
+  owner        User          @relation("GroupOwner", fields: [ownerId], references: [id])
+  name         String
+  description  String?
+  baseCurrency String        @default("INR")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  members      GroupMember[]
+  expenses     Expense[]
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+model GroupMember {
+  id             String    @id @default(uuid())
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String?
+  group          Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId        String
+  displayName    String
+  normalizedName String
+  isGuest        Boolean   @default(false)
+  joinedAt       DateTime  @default(now())
+  leftAt         DateTime?
+  role           Role      @default(MEMBER)
+
+  expensesPaid           Expense[]            @relation("ExpensePaidBy")
+  expenseParticipations  ExpenseParticipant[] @relation("ExpenseParticipantMember")
+  settlementsPaid        Settlement[]         @relation("SettlementPayer")
+  settlementsReceived    Settlement[]         @relation("SettlementReceiver")
+
+  @@unique([userId, groupId])
+}
+
+enum SplitType {
+  EQUAL
+  EXACT
+  PERCENTAGE
+  SHARES
+}
+
+model Expense {
+  id           String               @id @default(uuid())
+  title        String
+  description  String?
+  amount       Decimal              @db.Decimal(10, 2)
+  currency     String               @default("USD")
+  paidBy       GroupMember          @relation("ExpensePaidBy", fields: [paidById], references: [id])
+  paidById     String
+  group        Group?               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId      String?
+  expenseDate  DateTime
+  splitType    SplitType            @default(EQUAL)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  participants ExpenseParticipant[]
+}
+
+model ExpenseParticipant {
+  id          String      @id @default(uuid())
+  expense     Expense     @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  expenseId   String
+  member      GroupMember @relation("ExpenseParticipantMember", fields: [memberId], references: [id], onDelete: Cascade)
+  memberId    String
+  shareAmount Decimal     @db.Decimal(10, 2)
+}
+
+model Settlement {
+  id         String      @id @default(uuid())
+  payer      GroupMember @relation("SettlementPayer", fields: [payerId], references: [id])
+  payerId    String
+  receiver   GroupMember @relation("SettlementReceiver", fields: [receiverId], references: [id])
+  receiverId String
+  amount     Decimal     @db.Decimal(10, 2)
+  date       DateTime    @default(now())
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model ImportBatch {
+  id         String      @id @default(uuid())
+  filename   String
+  importedBy String
+  status     ImportStatus @default(PENDING)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  rows       ImportRow[]
+  anomalies  Anomaly[]
+}
+
+enum RowStatus {
+  PENDING
+  VALID
+  INVALID
+  IMPORTED
+}
+
+model ImportRow {
+  id        String    @id @default(uuid())
+  batch     ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batchId   String
+  rawData   Json
+  status    RowStatus @default(PENDING)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  anomalies Anomaly[]
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Anomaly {
+  id              String      @id @default(uuid())
+  batch           ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batchId         String
+  row             ImportRow?  @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  rowId           String?
+  anomalyType     String
+  severity        Severity
+  message         String
+  suggestedAction String?
+  approved        Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  entityType  String
+  entityId    String
+  action      String
+  beforeData  Json?
+  afterData   Json?
+  performedBy User?    @relation("PerformedBy", fields: [userId], references: [id])
+  userId      String?
+  createdAt   DateTime @default(now())
+}
