@@ -12,7 +12,10 @@ const app = express();
 app.use(express.static(path.join(__dirname, 'dist', 'client')));
 
 // Pass all other requests to TanStack Start's SSR handler
-const adapter = createServerAdapter(appHandler.default || appHandler);
+const adapter = createServerAdapter((req) => {
+  const handler = appHandler.default || appHandler;
+  return handler.fetch(req);
+});
 app.use(adapter);
 
 const port = process.env.PORT || 3000;
